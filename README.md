@@ -62,6 +62,64 @@ npm run truss:check
 npm run truss:check:json
 ```
 
+## Run Truss on Local Project
+
+### local-project-setup
+
+1. clone repository to local machine or use local project
+2. create a truss.yml config file in root directory
+3. run CLI command:
+
+```bash
+  npm run truss:check -- --repo /name/dir/example-local-repo --config truss.yml
+```
+
+### Example truss.yml in example-local-repo root directory
+
+```yaml
+version: "1"
+
+layers:
+  client:
+    - "client/**/*.ts"
+    - "client/**/*.tsx"
+  server:
+    - "server/**/*.ts"
+  shared:
+    - "shared/**/*.ts"
+
+rules:
+  # Client must not import from server
+  - name: no-client-to-server
+    from: client
+    disallow: [server]
+    message: Client must not import from server.
+
+  # Shared layer should not depend on client or server
+  - name: shared-is-independent
+    from: shared
+    disallow: [client, server]
+    message: Shared code must not import from client or server.
+
+policy:
+  failOnSuppressedViolations: false
+  failOnAnyViolation: false
+  maxSuppressions: 5
+  failOnInvalidSuppressions: true
+
+suppressions:
+  - file: some/file.ts
+    rule: no-client-to-server
+    reason: Temporary dexception; refactor tracked in ticket X.
+    expiresAt: "2026-06-01"
+```
+
+### run Truss on repo to check on
+
+```bash
+npm run truss:check -- --repo /name/dir/example-local-repo --config truss.yml
+```
+
 ## CI (GitHub Actions)
 
 ### Fail PR on Violations

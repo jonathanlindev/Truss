@@ -64,7 +64,7 @@ npm run truss:check:json
 
 ## Run Truss on Local Project
 
-### local-project-setup
+### Local-Project-Setup
 
 1. clone repository to local machine or use local project
 2. create a truss.yml config file in root directory
@@ -110,11 +110,11 @@ policy:
 suppressions:
   - file: some/file.ts
     rule: no-client-to-server
-    reason: Temporary dexception; refactor tracked in ticket X.
+    reason: Temporary exception; refactor tracked in ticket X.
     expiresAt: "2026-06-01"
 ```
 
-### run Truss on repo to check on
+### Run Truss on repo to check on
 
 ```bash
 npm run truss:check -- --repo /name/dir/example-local-repo --config truss.yml

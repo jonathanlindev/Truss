@@ -28,7 +28,9 @@ program
         (0, configLoader_1.loadTrussConfig)(path.resolve(repoRoot, configPath));
     }
     catch (e) {
-        const msg = e instanceof configLoader_1.ConfigError ? e.message : `Failed to load config: ${e.message}`;
+        const msg = e instanceof configLoader_1.ConfigError
+            ? e.message
+            : `Failed to load config: ${e.message}`;
         if (format === "json") {
             console.log(JSON.stringify({ error: msg, exitCode: types_1.ExitCode.CONFIG_ERROR }, null, 2));
         }
@@ -49,8 +51,11 @@ program
         console.log((0, reporter_1.renderJsonReport)(report));
     }
     else {
-        console.log((0, reporter_1.renderHumanReport)(report, { showSuppressed: Boolean(options.showSuppressed) }));
+        console.log((0, reporter_1.renderHumanReport)(report, {
+            showSuppressed: Boolean(options.showSuppressed),
+        }));
     }
     process.exitCode = exitCode;
+    ``;
 });
 program.parse(process.argv);

@@ -19,7 +19,11 @@ program
   .option("-c, --config <path>", "Path to truss.yml", "truss.yml")
   .option("--repo <path>", "Repo root", ".")
   .option("--format <format>", "Output format: human|json", "human")
-  .option("--show-suppressed", "Print suppressed violations in full detail (human only)", false)
+  .option(
+    "--show-suppressed",
+    "Print suppressed violations in full detail (human only)",
+    false,
+  )
   .action(async (options) => {
     const repoRoot = path.resolve(options.repo);
     const configPath = options.config;
@@ -29,9 +33,18 @@ program
     try {
       loadTrussConfig(path.resolve(repoRoot, configPath));
     } catch (e) {
-      const msg = e instanceof ConfigError ? e.message : `Failed to load config: ${(e as Error).message}`;
+      const msg =
+        e instanceof ConfigError
+          ? e.message
+          : `Failed to load config: ${(e as Error).message}`;
       if (format === "json") {
-        console.log(JSON.stringify({ error: msg, exitCode: ExitCode.CONFIG_ERROR }, null, 2));
+        console.log(
+          JSON.stringify(
+            { error: msg, exitCode: ExitCode.CONFIG_ERROR },
+            null,
+            2,
+          ),
+        );
       } else {
         console.error("Truss: Configuration error");
         console.error(msg);
@@ -50,10 +63,15 @@ program
     if (format === "json") {
       console.log(renderJsonReport(report));
     } else {
-      console.log(renderHumanReport(report, { showSuppressed: Boolean(options.showSuppressed) }));
+      console.log(
+        renderHumanReport(report, {
+          showSuppressed: Boolean(options.showSuppressed),
+        }),
+      );
     }
 
     process.exitCode = exitCode;
+    ``;
   });
 
 program.parse(process.argv);

@@ -88,6 +88,20 @@ layers:
   shared:
     - "shared/**/*.ts"
 
+Layer Resolution Rules:
+# Truss assigns exactly one layer to each file.
+	-	If no layer matches a file → configuration error.
+	-	If multiple layers match a file → configuration error.
+	- Layer resolution is deterministic and based only on config rules (no heuristics).
+
+Example:
+
+# Truss: Configuration error
+
+Layer conflict for file "src/domain/services/user.ts"
+Matched layers: domain, services
+Fix: make layer patterns non-overlapping so each file matches exactly one layer.
+
 rules:
   # Client must not import from server
   - name: no-client-to-server

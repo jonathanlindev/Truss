@@ -3,7 +3,11 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { loadTrussConfig, ConfigError } from "../src/config/configLoader";
 import { runCheck } from "../src/core/engine";
-import { renderHumanReport, renderJsonReport } from "../src/core/reporter";
+import {
+  renderHumanReport,
+  renderJsonError,
+  renderJsonReport,
+} from "../src/core/reporter";
 import { ExitCode } from "../src/core/types";
 
 const program = new Command();
@@ -38,13 +42,7 @@ program
           ? e.message
           : `Failed to load config: ${(e as Error).message}`;
       if (format === "json") {
-        console.log(
-          JSON.stringify(
-            { error: msg, exitCode: ExitCode.CONFIG_ERROR },
-            null,
-            2,
-          ),
-        );
+        console.log(renderJsonError(msg, ExitCode.CONFIG_ERROR));
       } else {
         console.error("Truss: Configuration error");
         console.error(msg);
@@ -61,7 +59,7 @@ program
     });
 
     if (format === "json") {
-      console.log(renderJsonReport(report));
+      console.log(renderJsonReport(report, exitCode));
     } else {
       console.log(
         renderHumanReport(report, {
@@ -71,7 +69,6 @@ program
     }
 
     process.exitCode = exitCode;
-    ``;
   });
 
 program.parse(process.argv);

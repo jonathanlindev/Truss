@@ -54,6 +54,69 @@ Truss: No Architectural violations found
 Checked 9000 files
 ```
 
+## JSON Output Contract
+
+When `--format json` is provided, Truss prints exactly one JSON object to stdout.
+
+### Schema versioning
+
+All JSON output includes a versioned envelope:
+
+- `schemaVersion`: contract version (for example `"1.0.0"`)
+- `kind`: `"report"` or `"error"`
+
+### Report output (`kind: "report"`)
+
+Field order is deterministic:
+`schemaVersion`, `kind`, `exitCode`, `checkedFiles`, `edges`, `unsuppressed`, `suppressed`, `summary`.
+
+Example:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "kind": "report",
+  "exitCode": 1,
+  "checkedFiles": 42,
+  "edges": 137,
+  "unsuppressed": [],
+  "suppressed": [],
+  "summary": {
+    "unsuppressedCount": 0,
+    "suppressedCount": 0,
+    "totalCount": 0
+  }
+}
+```
+
+### Error output (`kind: "error"`)
+
+Field order is deterministic:
+`schemaVersion`, `kind`, `exitCode`, `error`.
+
+Example:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "kind": "error",
+  "exitCode": 2,
+  "error": "Failed to load truss.yml"
+}
+```
+
+### Deterministic ordering
+
+- Violations are copied and sorted before serialization.
+- Sort keys: `ruleName`, `edge.fromFile`, `edge.line`, `edge.importText`.
+- Objects are built with explicit key order in reporter.
+
+### Compatibility policy
+
+- `1.x` versions allow additive, backward-compatible changes only.
+- Breaking changes (remove/rename/type/meaning changes) require a major bump (for example `2.0.0`).
+- In `1.x`, new optional keys must be appended to preserve stable snapshots and consumer parsing.
+
 ## Run Locally
 
 ```bash

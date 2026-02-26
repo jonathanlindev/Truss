@@ -34,6 +34,32 @@ export type TrussReport = {
   };
 };
 
+export const REPORT_SCHEMA_VERSION = "1.0.0" as const;
+
+export interface JsonReportV1 {
+  schemaVersion: typeof REPORT_SCHEMA_VERSION;
+  kind: "report";
+  exitCode: number;
+  checkedFiles: number;
+  edges: number;
+  unsuppressed: Violation[];
+  suppressed: SuppressedViolation[];
+  summary: {
+    unsuppressedCount: number;
+    suppressedCount: number;
+    totalCount: number;
+  };
+}
+
+export interface JsonErrorV1 {
+  schemaVersion: typeof REPORT_SCHEMA_VERSION;
+  kind: "error";
+  exitCode: number;
+  error: string;
+}
+
+export type JsonOutputV1 = JsonReportV1 | JsonErrorV1;
+
 //Exit codes used by the CLI process
 export const ExitCode = {
   OK: 0,

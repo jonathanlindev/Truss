@@ -32,7 +32,7 @@ program
             ? e.message
             : `Failed to load config: ${e.message}`;
         if (format === "json") {
-            console.log(JSON.stringify({ error: msg, exitCode: types_1.ExitCode.CONFIG_ERROR }, null, 2));
+            console.log((0, reporter_1.renderJsonError)(msg, types_1.ExitCode.CONFIG_ERROR));
         }
         else {
             console.error("Truss: Configuration error");
@@ -48,7 +48,7 @@ program
         showSuppressed: Boolean(options.showSuppressed),
     });
     if (format === "json") {
-        console.log((0, reporter_1.renderJsonReport)(report));
+        console.log((0, reporter_1.renderJsonReport)(report, exitCode));
     }
     else {
         console.log((0, reporter_1.renderHumanReport)(report, {
@@ -56,6 +56,5 @@ program
         }));
     }
     process.exitCode = exitCode;
-    ``;
 });
 program.parse(process.argv);

@@ -5,22 +5,15 @@ import { buildDependencyEdges } from "../graph/dependencyGraph";
 import { applySuppressions, evaluateRules } from "./validator";
 import { CheckOptions, ExitCode, TrussReport } from "./types";
 
-/**
- * emptyReport()
- * Purpose: Create a default (empty) report object.
- * We use it when an error happens, so CLI still returns valid JSON/report shape.
- * Input: none
- * Output: TrussReport with zero counts and empty arrays
- */
-function emptyReport(): TrussReport {
-  return {
-    checkedFiles: 0,
-    edges: 0,
-    unsuppressed: [],
-    suppressed: [],
-    summary: { unsuppressedCount: 0, suppressedCount: 0, totalCount: 0 },
-  };
-}
+export type CheckRunResult =
+  | {
+      exitCode: typeof ExitCode.OK | typeof ExitCode.VIOLATIONS;
+      report: TrussReport;
+    }
+  | {
+      exitCode: typeof ExitCode.CONFIG_ERROR | typeof ExitCode.INTERNAL_ERROR;
+      error: string;
+    };
 
 /**
  * runCheck()
@@ -37,17 +30,21 @@ function emptyReport(): TrussReport {
  *  - opts: CheckOptions object (repoRoot, configPath, format, showSuppressed)
  * Output:
  *  - Promise that resolves to:
- *      { exitCode: number, report: TrussReport }
+ *      { exitCode, report } on completed analysis
+ *      { exitCode, error } on config/internal failure
  */
 export async function runCheck(
   opts: CheckOptions
-): Promise<{ exitCode: number; report: TrussReport }> {
+): Promise<CheckRunResult> {
   try {
     // Make repoRoot an absolute path (safe and consistent).
     const repoRoot = path.resolve(opts.repoRoot);
 
     // Load and validate Truss config from file
-    const config = loadTrussConfig(path.resolve(repoRoot, opts.configPath));
+    const config = loadTrussConfig(
+      path.resolve(repoRoot, opts.configPath),
+      opts.configPath,
+    );
 
     // Find all source files in the repo (ts/tsx/js/jsx), respecting ignore rules.
     const files = discoverSourceFiles({
@@ -94,10 +91,13 @@ export async function runCheck(
   } catch (e) {
     // If config is invalid or missing, return config error code.
     if (e instanceof ConfigError) {
-      return { exitCode: ExitCode.CONFIG_ERROR, report: emptyReport() };
+      return { exitCode: ExitCode.CONFIG_ERROR, error: e.message };
     }
 
     // Any other error is treated as internal error.
-    return { exitCode: ExitCode.INTERNAL_ERROR, report: emptyReport() };
+    return {
+      exitCode: ExitCode.INTERNAL_ERROR,
+      error: `Internal error: ${(e as Error).message}`,
+    };
   }
 }

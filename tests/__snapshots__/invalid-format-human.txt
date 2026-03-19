@@ -1,0 +1,2 @@
+Truss: Configuration error
+Invalid --format value "xml". Expected "human" or "json".

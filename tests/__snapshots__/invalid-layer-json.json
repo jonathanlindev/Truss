@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "error",
+  "exitCode": 2,
+  "error": "Invalid layer config for \"api\" in truss.yml: expected a non-empty string[] of path patterns."
+}

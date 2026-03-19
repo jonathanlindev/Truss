@@ -8,22 +8,6 @@ const dependencyGraph_1 = require("../graph/dependencyGraph");
 const validator_1 = require("./validator");
 const types_1 = require("./types");
 /**
- * emptyReport()
- * Purpose: Create a default (empty) report object.
- * We use it when an error happens, so CLI still returns valid JSON/report shape.
- * Input: none
- * Output: TrussReport with zero counts and empty arrays
- */
-function emptyReport() {
-    return {
-        checkedFiles: 0,
-        edges: 0,
-        unsuppressed: [],
-        suppressed: [],
-        summary: { unsuppressedCount: 0, suppressedCount: 0, totalCount: 0 },
-    };
-}
-/**
  * runCheck()
  * Purpose: Main orchestration function for "truss check".
  * It runs the full pipeline:
@@ -38,14 +22,15 @@ function emptyReport() {
  *  - opts: CheckOptions object (repoRoot, configPath, format, showSuppressed)
  * Output:
  *  - Promise that resolves to:
- *      { exitCode: number, report: TrussReport }
+ *      { exitCode, report } on completed analysis
+ *      { exitCode, error } on config/internal failure
  */
 async function runCheck(opts) {
     try {
         // Make repoRoot an absolute path (safe and consistent).
         const repoRoot = path.resolve(opts.repoRoot);
         // Load and validate Truss config from file
-        const config = (0, configLoader_1.loadTrussConfig)(path.resolve(repoRoot, opts.configPath));
+        const config = (0, configLoader_1.loadTrussConfig)(path.resolve(repoRoot, opts.configPath), opts.configPath);
         // Find all source files in the repo (ts/tsx/js/jsx), respecting ignore rules.
         const files = (0, fileScanner_1.discoverSourceFiles)({
             repoRoot,
@@ -82,9 +67,12 @@ async function runCheck(opts) {
     catch (e) {
         // If config is invalid or missing, return config error code.
         if (e instanceof configLoader_1.ConfigError) {
-            return { exitCode: types_1.ExitCode.CONFIG_ERROR, report: emptyReport() };
+            return { exitCode: types_1.ExitCode.CONFIG_ERROR, error: e.message };
         }
         // Any other error is treated as internal error.
-        return { exitCode: types_1.ExitCode.INTERNAL_ERROR, report: emptyReport() };
+        return {
+            exitCode: types_1.ExitCode.INTERNAL_ERROR,
+            error: `Internal error: ${e.message}`,
+        };
     }
 }

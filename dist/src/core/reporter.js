@@ -36,15 +36,16 @@ function renderHumanReport(report, opts) {
             lines.push(`Suppressed violations: ${sup} (intentional, still reported)`);
             if (opts?.showSuppressed) {
                 lines.push("");
-                for (const v of report.suppressed) {
+                report.suppressed.forEach((v, index) => {
                     lines.push(`${v.ruleName} (suppressed)`);
                     lines.push(`Layers: ${v.fromLayer} -> ${v.toLayer}`);
                     lines.push(`${v.edge.fromFile}:${v.edge.line}`);
                     lines.push(`${v.edge.importText}`);
                     lines.push(`Reason: ${v.reason}`);
                     lines.push(`Suppression: ${v.suppressionReason}`);
-                    lines.push("");
-                }
+                    if (index < report.suppressed.length - 1)
+                        lines.push("");
+                });
             }
         }
         lines.push("Summary:");
@@ -55,6 +56,22 @@ function renderHumanReport(report, opts) {
     }
     lines.push("Truss: No Architectural violations found");
     lines.push(`Checked ${report.checkedFiles} files`);
+    if (sup > 0) {
+        lines.push(`Suppressed violations: ${sup} (intentional, still reported)`);
+        if (opts?.showSuppressed) {
+            lines.push("");
+            report.suppressed.forEach((v, index) => {
+                lines.push(`${v.ruleName} (suppressed)`);
+                lines.push(`Layers: ${v.fromLayer} -> ${v.toLayer}`);
+                lines.push(`${v.edge.fromFile}:${v.edge.line}`);
+                lines.push(`${v.edge.importText}`);
+                lines.push(`Reason: ${v.reason}`);
+                lines.push(`Suppression: ${v.suppressionReason}`);
+                if (index < report.suppressed.length - 1)
+                    lines.push("");
+            });
+        }
+    }
     return lines.join("\n");
 }
 function compareViolations(a, b) {

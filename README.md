@@ -94,6 +94,11 @@ Example:
 Field order is deterministic:
 `schemaVersion`, `kind`, `exitCode`, `error`.
 
+`kind: "error"` is used when analysis does not complete normally:
+
+- `exitCode: 2` for configuration or CLI usage errors
+- `exitCode: 3` for internal/runtime failures
+
 Example:
 
 ```json
@@ -116,6 +121,15 @@ Example:
 - `1.x` versions allow additive, backward-compatible changes only.
 - Breaking changes (remove/rename/type/meaning changes) require a major bump (for example `2.0.0`).
 - In `1.x`, new optional keys must be appended to preserve stable snapshots and consumer parsing.
+
+## CLI Test Coverage
+
+The integration suite uses fixture repos and committed snapshots to keep the CLI contract explicit.
+
+- Fixture repos cover clean runs, unsuppressed violations, and suppressed-only violations.
+- Exit codes `0`, `1`, `2`, and `3` are asserted.
+- Human-readable snapshots are committed for clean, unsuppressed, and suppressed scenarios.
+- JSON snapshots are committed for clean, unsuppressed, suppressed, config-error, and internal-error scenarios.
 
 ## Run Locally
 

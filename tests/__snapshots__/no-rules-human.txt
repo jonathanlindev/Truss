@@ -1,0 +1,2 @@
+Truss: Configuration error
+Invalid config in truss.yml: "rules" must be a non-empty array. Add at least one rule entry.

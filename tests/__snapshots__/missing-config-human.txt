@@ -1,0 +1,2 @@
+Truss: Configuration error
+Missing config at truss.yml. Create truss.yml or pass --config <path>.

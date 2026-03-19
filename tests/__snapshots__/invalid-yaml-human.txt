@@ -1,0 +1,2 @@
+Truss: Configuration error
+Invalid YAML in truss.yml. Fix YAML syntax and try again. Details: Flow sequence in block collection must be sufficiently indented and end with a ] at line 5, column 1:

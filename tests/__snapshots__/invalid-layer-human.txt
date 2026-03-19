@@ -1,0 +1,2 @@
+Truss: Configuration error
+Invalid layer config for "api" in truss.yml: expected a non-empty string[] of path patterns.

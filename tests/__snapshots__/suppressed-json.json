@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "report",
+  "exitCode": 0,
+  "checkedFiles": 2,
+  "edges": 1,
+  "unsuppressed": [],
+  "suppressed": [
+    {
+      "ruleName": "no-api-to-db",
+      "fromLayer": "api",
+      "toLayer": "db",
+      "edge": {
+        "fromFile": "src/api/user.ts",
+        "toFile": "src/db/client.ts",
+        "importText": "import { db } from \"../db/client\";",
+        "line": 1,
+        "importKind": "internal"
+      },
+      "reason": "API layer must not depend directly on DB layer.",
+      "suppressionReason": "Temporary exception for legacy adapter."
+    }
+  ],
+  "summary": {
+    "unsuppressedCount": 0,
+    "suppressedCount": 1,
+    "totalCount": 1
+  }
+}

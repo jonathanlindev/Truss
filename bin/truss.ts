@@ -3,7 +3,11 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { loadTrussConfig, ConfigError } from "../src/config/configLoader";
 import { runCheck } from "../src/core/engine";
-import { renderHumanReport, renderJsonReport } from "../src/core/reporter";
+import {
+  renderHumanReport,
+  renderJsonError,
+  renderJsonReport,
+} from "../src/core/reporter";
 import { ExitCode } from "../src/core/types";
 
 const program = new Command();
@@ -19,19 +23,41 @@ program
   .option("-c, --config <path>", "Path to truss.yml", "truss.yml")
   .option("--repo <path>", "Repo root", ".")
   .option("--format <format>", "Output format: human|json", "human")
-  .option("--show-suppressed", "Print suppressed violations in full detail (human only)", false)
+  .option(
+    "--show-suppressed",
+    "Print suppressed violations in full detail (human only)",
+    false,
+  )
   .action(async (options) => {
     const repoRoot = path.resolve(options.repo);
     const configPath = options.config;
-    const format = options.format === "json" ? "json" : "human";
+    const format = options.format;
+
+    if (format !== "human" && format !== "json") {
+      const msg = `Invalid --format value "${format}". Expected "human" or "json".`;
+      console.error("Truss: Configuration error");
+      console.error(msg);
+      process.exitCode = ExitCode.CONFIG_ERROR;
+      return;
+    }
+
+    if (format === "json" && options.showSuppressed) {
+      const msg = "--show-suppressed can only be used with --format human.";
+      console.log(renderJsonError(msg, ExitCode.CONFIG_ERROR));
+      process.exitCode = ExitCode.CONFIG_ERROR;
+      return;
+    }
 
     // Preflight config errors so users get a clear exit=2 message.
     try {
-      loadTrussConfig(path.resolve(repoRoot, configPath));
+      loadTrussConfig(path.resolve(repoRoot, configPath), configPath);
     } catch (e) {
-      const msg = e instanceof ConfigError ? e.message : `Failed to load config: ${(e as Error).message}`;
+      const msg =
+        e instanceof ConfigError
+          ? e.message
+          : `Failed to load config: ${(e as Error).message}`;
       if (format === "json") {
-        console.log(JSON.stringify({ error: msg, exitCode: ExitCode.CONFIG_ERROR }, null, 2));
+        console.log(renderJsonError(msg, ExitCode.CONFIG_ERROR));
       } else {
         console.error("Truss: Configuration error");
         console.error(msg);
@@ -40,20 +66,35 @@ program
       return;
     }
 
-    const { exitCode, report } = await runCheck({
+    const result = await runCheck({
       repoRoot,
       configPath,
       format,
       showSuppressed: Boolean(options.showSuppressed),
     });
 
-    if (format === "json") {
-      console.log(renderJsonReport(report));
+    if ("error" in result) {
+      if (format === "json") {
+        console.log(renderJsonError(result.error, result.exitCode));
+      } else {
+        const label =
+          result.exitCode === ExitCode.CONFIG_ERROR
+            ? "Truss: Configuration error"
+            : "Truss: Internal error";
+        console.error(label);
+        console.error(result.error);
+      }
+    } else if (format === "json") {
+      console.log(renderJsonReport(result.report, result.exitCode));
     } else {
-      console.log(renderHumanReport(report, { showSuppressed: Boolean(options.showSuppressed) }));
+      console.log(
+        renderHumanReport(result.report, {
+          showSuppressed: Boolean(options.showSuppressed),
+        }),
+      );
     }
 
-    process.exitCode = exitCode;
+    process.exitCode = result.exitCode;
   });
 
 program.parse(process.argv);

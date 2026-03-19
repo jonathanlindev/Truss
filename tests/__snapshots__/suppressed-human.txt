@@ -1,0 +1,10 @@
+Truss: No Architectural violations found
+Checked 2 files
+Suppressed violations: 1 (intentional, still reported)
+
+no-api-to-db (suppressed)
+Layers: api -> db
+src/api/user.ts:1
+import { db } from "../db/client";
+Reason: API layer must not depend directly on DB layer.
+Suppression: Temporary exception for legacy adapter.

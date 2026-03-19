@@ -1,0 +1,12 @@
+Truss: Architectural violations found (1)
+
+no-api-to-db
+Layers: api -> db
+src/api/user.ts:1
+import { db } from "../db/client";
+Reason: API layer must not depend directly on DB layer.
+
+Summary:
+Unsuppressed: 1
+Suppressed: 0
+Total: 1

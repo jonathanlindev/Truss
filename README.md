@@ -54,6 +54,83 @@ Truss: No Architectural violations found
 Checked 9000 files
 ```
 
+## JSON Output Contract
+
+When `--format json` is provided, Truss prints exactly one JSON object to stdout.
+
+### Schema versioning
+
+All JSON output includes a versioned envelope:
+
+- `schemaVersion`: contract version (for example `"1.0.0"`)
+- `kind`: `"report"` or `"error"`
+
+### Report output (`kind: "report"`)
+
+Field order is deterministic:
+`schemaVersion`, `kind`, `exitCode`, `checkedFiles`, `edges`, `unsuppressed`, `suppressed`, `summary`.
+
+Example:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "kind": "report",
+  "exitCode": 1,
+  "checkedFiles": 42,
+  "edges": 137,
+  "unsuppressed": [],
+  "suppressed": [],
+  "summary": {
+    "unsuppressedCount": 0,
+    "suppressedCount": 0,
+    "totalCount": 0
+  }
+}
+```
+
+### Error output (`kind: "error"`)
+
+Field order is deterministic:
+`schemaVersion`, `kind`, `exitCode`, `error`.
+
+`kind: "error"` is used when analysis does not complete normally:
+
+- `exitCode: 2` for configuration or CLI usage errors
+- `exitCode: 3` for internal/runtime failures
+
+Example:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "kind": "error",
+  "exitCode": 2,
+  "error": "Failed to load truss.yml"
+}
+```
+
+### Deterministic ordering
+
+- Violations are copied and sorted before serialization.
+- Sort keys: `ruleName`, `edge.fromFile`, `edge.line`, `edge.importText`.
+- Objects are built with explicit key order in reporter.
+
+### Compatibility policy
+
+- `1.x` versions allow additive, backward-compatible changes only.
+- Breaking changes (remove/rename/type/meaning changes) require a major bump (for example `2.0.0`).
+- In `1.x`, new optional keys must be appended to preserve stable snapshots and consumer parsing.
+
+## CLI Test Coverage
+
+The integration suite uses fixture repos and committed snapshots to keep the CLI contract explicit.
+
+- Fixture repos cover clean runs, unsuppressed violations, and suppressed-only violations.
+- Exit codes `0`, `1`, `2`, and `3` are asserted.
+- Human-readable snapshots are committed for clean, unsuppressed, and suppressed scenarios.
+- JSON snapshots are committed for clean, unsuppressed, suppressed, config-error, and internal-error scenarios.
+
 ## Run Locally
 
 ```bash

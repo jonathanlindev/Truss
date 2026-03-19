@@ -1,0 +1,13 @@
+version: "1"
+
+layers:
+  app:
+    - "src/app"
+  shared:
+    - "src/shared"
+
+rules:
+  - name: no-shared-to-app
+    from: shared
+    disallow: [app]
+    message: Shared must not depend on app.

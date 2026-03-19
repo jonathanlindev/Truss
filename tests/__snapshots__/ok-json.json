@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "report",
+  "exitCode": 0,
+  "checkedFiles": 2,
+  "edges": 1,
+  "unsuppressed": [],
+  "suppressed": [],
+  "summary": {
+    "unsuppressedCount": 0,
+    "suppressedCount": 0,
+    "totalCount": 0
+  }
+}

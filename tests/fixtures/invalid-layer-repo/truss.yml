@@ -1,0 +1,7 @@
+layers:
+  api: "src/api"
+
+rules:
+  - name: no-api-to-db
+    from: api
+    disallow: [db]

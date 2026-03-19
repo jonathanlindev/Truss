@@ -167,3 +167,18 @@ test("exit code 3 for internal runtime failures", () => {
   assert.strictEqual(result.stderr, "");
   assertSnapshot("internal-error-json.json", result.stdout);
 });
+
+test("human snapshot for internal runtime failures", () => {
+  const fileRepo = path.join(fixturePath("ok-repo"), "truss.yml");
+  const validConfig = path.join(fixturePath("ok-repo"), "truss.yml");
+  const result = runTruss([
+    "--repo",
+    fileRepo,
+    "--config",
+    validConfig,
+  ]);
+
+  assert.strictEqual(result.status, 3);
+  assert.strictEqual(result.stdout, "");
+  assertSnapshot("internal-error-human.txt", result.stderr);
+});

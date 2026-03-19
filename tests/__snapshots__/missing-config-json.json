@@ -2,5 +2,5 @@
   "schemaVersion": "1.0.0",
   "kind": "error",
   "exitCode": 2,
-  "error": "Missing config at truss.yml. Create truss.yml or pass --config <path>."
+  "error": "Config file not found: truss.yml. Add a truss.yml at the repo root or pass --config <path>."
 }

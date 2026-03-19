@@ -1,2 +1,2 @@
 Truss: Configuration error
-Missing config at truss.yml. Create truss.yml or pass --config <path>.
+Config file not found: truss.yml. Add a truss.yml at the repo root or pass --config <path>.

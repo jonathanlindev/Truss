@@ -14,6 +14,17 @@ function labelPath(displayPath?: string, fallbackPath?: string): string {
   return displayPath ?? fallbackPath ?? "truss.yml";
 }
 
+function formatYamlError(err: Error, shownPath: string): string {
+  const detail = err.message.split("\n")[0].trim();
+  const location = detail.match(/at line (\d+), column (\d+)/);
+
+  if (location) {
+    return `Invalid YAML in ${shownPath} at line ${location[1]}, column ${location[2]}. Fix the syntax and try again.`;
+  }
+
+  return `Invalid YAML in ${shownPath}. Fix the syntax and try again.`;
+}
+
 // Pseudo-flow: read YAML -> validate required shape -> return typed config.
 export function loadTrussConfig(
   configPath: string,
@@ -24,7 +35,7 @@ export function loadTrussConfig(
 
   if (!fs.existsSync(abs)) {
     throw new ConfigError(
-      `Missing config at ${shownPath}. Create truss.yml or pass --config <path>.`,
+      `Config file not found: ${shownPath}. Add a truss.yml at the repo root or pass --config <path>.`,
     );
   }
 
@@ -33,10 +44,7 @@ export function loadTrussConfig(
     const raw = fs.readFileSync(abs, "utf8");
     parsed = yaml.parse(raw);
   } catch (e) {
-    const detail = (e as Error).message.split("\n")[0].trim();
-    throw new ConfigError(
-      `Invalid YAML in ${shownPath}. Fix YAML syntax and try again. Details: ${detail}`,
-    );
+    throw new ConfigError(formatYamlError(e as Error, shownPath));
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -61,16 +69,16 @@ export function loadTrussConfig(
   }
 
   for (const [layerName, patterns] of Object.entries(cfg.layers)) {
-    if (!Array.isArray(patterns) || patterns.length === 0 || patterns.some((p) => typeof p !== "string")) {
+  if (!Array.isArray(patterns) || patterns.length === 0 || patterns.some((p) => typeof p !== "string")) {
       throw new ConfigError(
-        `Invalid layer config for "${layerName}" in ${shownPath}: expected a non-empty string[] of path patterns.`,
+        `Invalid layer "${layerName}" in ${shownPath}. Expected a non-empty list of path patterns, for example: ["src/${layerName}"].`,
       );
     }
   }
 
   if (!cfg.rules || !Array.isArray(cfg.rules) || cfg.rules.length === 0) {
     throw new ConfigError(
-      `Invalid config in ${shownPath}: "rules" must be a non-empty array. Add at least one rule entry.`,
+      `No rules defined in ${shownPath}. Add at least one rule under "rules".`,
     );
   }
 

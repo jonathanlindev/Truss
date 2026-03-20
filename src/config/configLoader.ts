@@ -2,13 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as yaml from "yaml";
 import { TrussConfig } from "./configSchema";
+import { ConfigError } from "../utils/errors";
 
-export class ConfigError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ConfigError";
-  }
-}
+// export class ConfigError extends Error {
+//   constructor(message: string) {
+//     super(message);
+//     this.name = "ConfigError";
+//   }
+// }
 
 function labelPath(displayPath?: string, fallbackPath?: string): string {
   return displayPath ?? fallbackPath ?? "truss.yml";

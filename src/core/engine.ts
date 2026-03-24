@@ -113,31 +113,71 @@ export async function runCheck(
   }
 }
 
-function buildDiagnostics(parserIssues: ParserIssue[]): AnalysisDiagnostic[] {
-  return parserIssues.map((issue) => ({
-    category: "parser",
-    code: issue.code,
-    severity: issue.severity,
-    message: issue.message,
-    file: issue.fromFile,
-    line: issue.line,
-    importText: issue.importText,
-  }));
+// shuangfei below ruleEngine.js
+
+const NoCrossLayerRule = require("../rules/NoCrossLayerRule")
+const SuppressionEngine = require("../rules/SuppressionEngine")
+const { parseInlineSuppressions } = require("../rules/InlineSuppressionParser")
+
+function getLayerFromPath(path) {
+  if (path.includes("api")) return "api"
+  if (path.includes("db")) return "db"
+  if (path.includes("service")) return "service"
+  return "unknown"
 }
 
-function countDiagnosticCategories(
-  diagnostics: AnalysisDiagnostic[]
-): AnalysisCategoryCounts {
-  const counts: AnalysisCategoryCounts = {
-    parser: 0,
-    graph: 0,
-    validation: 0,
-    suppression: 0,
-  };
+function runEngine(filePath, fileContent) {
+  // Step 1: Parse imports
+  const imports = parseImports(fileContent)
 
-  for (const diagnostic of diagnostics) {
-    counts[diagnostic.category] += 1;
+  // Step 2: Parse inline suppressions
+  const inlineSuppressions = parseInlineSuppressions(fileContent)
+
+  // Step 3: Create rule instances (pretend parsed from YAML)
+  const rules = [
+    new NoCrossLayerRule({
+      id: "no-cross-layer",
+      from: "api",
+      to: "db"
+    })
+  ]
+
+  // Step 4: Evaluate rules
+  let violations = []
+
+  for (const rule of rules) {
+    violations.push(
+      ...rule.evaluate({
+        filePath,
+        imports,
+        getLayerFromPath
+      })
+    )
   }
 
-  return counts;
+  // Step 5: Apply suppressions
+  const suppressionEngine = new SuppressionEngine(inlineSuppressions)
+  const filteredViolations = suppressionEngine.filter(violations)
+
+  return filteredViolations
 }
+
+function parseImports(fileContent) {
+  const lines = fileContent.split("\n")
+  const imports = []
+
+  lines.forEach((line, index) => {
+    const match = line.match(/import .* from ["'](.+)["']/)
+
+    if (match) {
+      imports.push({
+        source: match[1],
+        line: index + 1
+      })
+    }
+  })
+
+  return imports
+}
+
+module.exports = { runEngine }

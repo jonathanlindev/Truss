@@ -1,0 +1,2 @@
+Truss: Configuration error
+Invalid layer "api" in truss.yml. Expected a non-empty list of path patterns, for example: ["src/api"].

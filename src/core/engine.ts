@@ -1,26 +1,18 @@
 import * as path from "node:path";
-import { loadTrussConfig, ConfigError } from "../config/configLoader";
+import { loadTrussConfig } from "../config/configLoader";
 import { discoverSourceFiles } from "../parser/fileScanner";
 import { buildDependencyEdges } from "../graph/dependencyGraph";
 import { applySuppressions, evaluateRules } from "./validator";
-import { CheckOptions, ExitCode, TrussReport } from "./types";
-
-/**
- * emptyReport()
- * Purpose: Create a default (empty) report object.
- * We use it when an error happens, so CLI still returns valid JSON/report shape.
- * Input: none
- * Output: TrussReport with zero counts and empty arrays
- */
-function emptyReport(): TrussReport {
-  return {
-    checkedFiles: 0,
-    edges: 0,
-    unsuppressed: [],
-    suppressed: [],
-    summary: { unsuppressedCount: 0, suppressedCount: 0, totalCount: 0 },
-  };
-}
+import {
+  AnalysisCategoryCounts,
+  AnalysisDiagnostic,
+  CheckOptions,
+  CheckRunResult,
+  ExitCode,
+  ParserIssue,
+  TrussReport,
+} from "./types";
+import { ConfigError } from "../utils/errors";
 
 /**
  * runCheck()
@@ -37,17 +29,21 @@ function emptyReport(): TrussReport {
  *  - opts: CheckOptions object (repoRoot, configPath, format, showSuppressed)
  * Output:
  *  - Promise that resolves to:
- *      { exitCode: number, report: TrussReport }
+ *      { exitCode, report } on completed analysis
+ *      { exitCode, error } on config/internal failure
  */
 export async function runCheck(
   opts: CheckOptions
-): Promise<{ exitCode: number; report: TrussReport }> {
+): Promise<CheckRunResult> {
   try {
     // Make repoRoot an absolute path (safe and consistent).
     const repoRoot = path.resolve(opts.repoRoot);
 
     // Load and validate Truss config from file
-    const config = loadTrussConfig(path.resolve(repoRoot, opts.configPath));
+    const config = loadTrussConfig(
+      path.resolve(repoRoot, opts.configPath),
+      opts.configPath,
+    );
 
     // Find all source files in the repo (ts/tsx/js/jsx), respecting ignore rules.
     const files = discoverSourceFiles({
@@ -62,8 +58,10 @@ export async function runCheck(
       );
     }
 
-    // Build a dependency graph as edges: fromFile -> toFile for every import.
-    const edges = buildDependencyEdges({ repoRoot, files });
+    // Build a dependency graph and collect parser-level issues per file.
+    const graph = buildDependencyEdges({ repoRoot, files });
+    const edges = graph.edges;
+    const parserIssues = graph.parserIssues;
 
     // Check edges against architecture rules and collect all violations.
     const { violations } = evaluateRules({ config, edges });
@@ -73,15 +71,25 @@ export async function runCheck(
     // - suppressed (allowed with reason)
     const { unsuppressed, suppressed } = applySuppressions({ config, violations });
 
+    const diagnostics = buildDiagnostics(parserIssues);
+    const categories = countDiagnosticCategories(diagnostics);
+
     // Create final report object for rendering (human or JSON).
     const report: TrussReport = {
       checkedFiles: files.length,
       edges: edges.length,
       unsuppressed,
       suppressed,
+      parserIssues,
+      analysis: {
+        diagnostics,
+        categories,
+      },
       summary: {
         unsuppressedCount: unsuppressed.length,
         suppressedCount: suppressed.length,
+        parserIssueCount: parserIssues.length,
+        diagnosticCount: diagnostics.length,
         totalCount: unsuppressed.length + suppressed.length,
       },
     };
@@ -90,15 +98,18 @@ export async function runCheck(
     const exitCode =
       report.summary.unsuppressedCount > 0 ? ExitCode.VIOLATIONS : ExitCode.OK;
 
-    return { exitCode, report };
+    return { exitCode, report, analysis: report.analysis };
   } catch (e) {
     // If config is invalid or missing, return config error code.
     if (e instanceof ConfigError) {
-      return { exitCode: ExitCode.CONFIG_ERROR, report: emptyReport() };
+      return { exitCode: ExitCode.CONFIG_ERROR, error: e.message };
     }
 
     // Any other error is treated as internal error.
-    return { exitCode: ExitCode.INTERNAL_ERROR, report: emptyReport() };
+    return {
+      exitCode: ExitCode.INTERNAL_ERROR,
+      error: `Internal error: ${(e as Error).message}`,
+    };
   }
 }
 

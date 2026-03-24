@@ -1,5 +1,6 @@
 import { parseImportsFromFile } from "../parser/importExtractor";
-import { DependencyEdge } from "../core/types";
+import { DependencyEdge, ParserIssue } from "../core/types";
+
 
 /**
  * buildDependencyEdges()
@@ -17,13 +18,16 @@ import { DependencyEdge } from "../core/types";
 export function buildDependencyEdges(opts: {
   repoRoot: string;
   files: string[];
-}): DependencyEdge[] {
+}): { edges: DependencyEdge[]; parserIssues: ParserIssue[] } {
   const edges: DependencyEdge[] = [];
+  const parserIssues: ParserIssue[] = [];
 
   // For each file, extract all import statements
   // and convert them into DependencyEdge objects.
   for (const file of opts.files) {
-    edges.push(...parseImportsFromFile({ repoRoot: opts.repoRoot, file }));
+    const parsed = parseImportsFromFile({ repoRoot: opts.repoRoot, file });
+    edges.push(...parsed.edges);
+    parserIssues.push(...parsed.parserIssues);
   }
 
   // Sort edges for stable and deterministic output.
@@ -32,8 +36,12 @@ export function buildDependencyEdges(opts: {
     (a, b) =>
       a.fromFile.localeCompare(b.fromFile) ||
       a.line - b.line ||
-      a.toFile.localeCompare(b.toFile),
+      targetKey(a).localeCompare(targetKey(b)),
   );
 
-  return edges;
+  return { edges, parserIssues };
+}
+
+function targetKey(e: DependencyEdge): string {
+  return e.importKind === "internal" ? e.toFile : e.packageName
 }

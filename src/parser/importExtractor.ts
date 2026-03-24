@@ -3,20 +3,11 @@ import * as path from "node:path";
 import * as ts from "typescript";
 
 import { DependencyEdge, ParserIssue } from "../core/types";
-import { FileScanError } from "../utils/errors";
 import { logger } from "../utils/logger";
 import {
   resolveImportToFile,
   isLocalSpecifier,
 } from "../utils/pathResolver";
-
-const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"];
-
-function toRepoRelativePosix(repoRoot: string, absPath: string): string | null {
-  const rel = path.relative(repoRoot, absPath);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
-  return rel.split(path.sep).join("/");
-}
 
 function normalizeExternal(specifier: string): string {
   if (specifier.startsWith("node:")) return specifier;
@@ -34,19 +25,33 @@ export function parseImportsFromFile(opts: {
   file: string;
 }): { edges: DependencyEdge[]; parserIssues: ParserIssue[] } {
   const abs = path.resolve(opts.repoRoot, opts.file);
+  const edges: DependencyEdge[] = [];
+  const parserIssues: ParserIssue[] = [];
 
   logger.debug(`Parsing imports in file: ${opts.file}`);
 
   if (!fs.existsSync(abs)) {
-    throw new FileScanError(`Source file not found: ${opts.file}`);
+    parserIssues.push({
+      code: "SOURCE_FILE_NOT_FOUND",
+      severity: "error",
+      message: "Source file not found",
+      fromFile: opts.file,
+    });
+    return { edges, parserIssues };
   }
 
   let sourceText: string;
   try {
     sourceText = fs.readFileSync(abs, "utf8");
-  } catch {
+  } catch (error) {
     logger.error(`Failed to read file: ${opts.file}`);
-    throw new FileScanError(`Failed to read file: ${opts.file}`);
+    parserIssues.push({
+      code: "SOURCE_FILE_READ_FAILED",
+      severity: "error",
+      message: `Failed to read source file: ${(error as Error).message || "unknown error"}`,
+      fromFile: opts.file,
+    });
+    return { edges, parserIssues };
   }
 
   const sourceFile = ts.createSourceFile(
@@ -56,8 +61,35 @@ export function parseImportsFromFile(opts: {
     true,
   );
 
-  const edges: DependencyEdge[] = [];
-  const parserIssues: ParserIssue[] = [];
+  const parseDiagnostics =
+    (
+      sourceFile as ts.SourceFile & {
+        parseDiagnostics?: readonly ts.DiagnosticWithLocation[];
+      }
+    ).parseDiagnostics ?? [];
+
+  for (const diagnostic of parseDiagnostics) {
+    const line =
+      diagnostic.start !== undefined
+        ? sourceFile.getLineAndCharacterOfPosition(diagnostic.start).line + 1
+        : undefined;
+    const importText =
+      diagnostic.start !== undefined && diagnostic.length !== undefined
+        ? sourceText
+            .slice(diagnostic.start, diagnostic.start + diagnostic.length)
+            .trim() || undefined
+        : undefined;
+
+    parserIssues.push({
+      code: "TYPESCRIPT_SYNTAX_DIAGNOSTIC",
+      severity:
+        diagnostic.category === ts.DiagnosticCategory.Error ? "error" : "warning",
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      fromFile: opts.file,
+      line,
+      importText,
+    });
+  }
 
   function pushEdge(specifier: string, node: ts.Node): void {
     const start = node.getStart(sourceFile);

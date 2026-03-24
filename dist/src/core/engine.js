@@ -8,52 +8,52 @@ const dependencyGraph_1 = require("../graph/dependencyGraph");
 const validator_1 = require("./validator");
 const types_1 = require("./types");
 const errors_1 = require("../utils/errors");
-/**
- * runCheck()
- * Purpose: Main orchestration function for "truss check".
- * It runs the full pipeline:
- *   1) Load config
- *   2) Scan repo for source files
- *   3) Build dependency edges (imports)
- *   4) Evaluate rules (create violations)
- *   5) Apply suppressions (split violations)
- *   6) Build final report + choose exit code
- *
- * Input:
- *  - opts: CheckOptions object (repoRoot, configPath, format, showSuppressed)
- * Output:
- *  - Promise that resolves to:
- *      { exitCode, report } on completed analysis
- *      { exitCode, error } on config/internal failure
- */
+const logger_1 = require("../utils/logger");
 async function runCheck(opts) {
     try {
-        // Make repoRoot an absolute path (safe and consistent).
         const repoRoot = path.resolve(opts.repoRoot);
-        // Load and validate Truss config from file
+        // #region agent log
+        fetch("http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8d2d4f" }, body: JSON.stringify({ sessionId: "8d2d4f", runId: "pre-fix", hypothesisId: "H3", location: "src/core/engine.ts:runCheck:entry", message: "runCheck entry with import bindings", data: { repoRoot, evaluateRulesType: typeof validator_1.evaluateRules, applySuppressionsType: typeof validator_1.applySuppressions }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
+        logger_1.logger.debug(`Starting Truss check in ${repoRoot}`);
+        // Load config
+        logger_1.logger.debug("Loading config...");
         const config = (0, configLoader_1.loadTrussConfig)(path.resolve(repoRoot, opts.configPath), opts.configPath);
-        // Find all source files in the repo (ts/tsx/js/jsx), respecting ignore rules.
+        // Discover files
+        logger_1.logger.debug("Scanning source files...");
         const files = (0, fileScanner_1.discoverSourceFiles)({
             repoRoot,
             extraIgnores: config.ignore,
         });
-        // If we found nothing, config/paths are probably wrong.
+        logger_1.logger.debug(`Found ${files.length} source files`);
         if (files.length === 0) {
             throw new errors_1.ConfigError("No source files found (.ts/.tsx/.js/.jsx). Check repoRoot/ignore settings.");
         }
-        // Build a dependency graph and collect parser-level issues per file.
+        // Build dependency graph (NEW API)
+        logger_1.logger.debug("Building dependency graph...");
         const graph = (0, dependencyGraph_1.buildDependencyEdges)({ repoRoot, files });
         const edges = graph.edges;
         const parserIssues = graph.parserIssues;
-        // Check edges against architecture rules and collect all violations.
+        logger_1.logger.debug(`Built ${edges.length} dependency edges`);
+        logger_1.logger.debug(`Collected ${parserIssues.length} parser issues`);
+        // Evaluate rules
+        logger_1.logger.debug("Evaluating architecture rules...");
+        // #region agent log
+        fetch("http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8d2d4f" }, body: JSON.stringify({ sessionId: "8d2d4f", runId: "pre-fix", hypothesisId: "H4", location: "src/core/engine.ts:runCheck:beforeEvaluateRules", message: "about to call evaluateRules", data: { edgeCount: edges.length, parserIssueCount: parserIssues.length }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
         const { violations } = (0, validator_1.evaluateRules)({ config, edges });
-        // Split violations into:
-        // - unsuppressed (real failures)
-        // - suppressed (allowed with reason)
-        const { unsuppressed, suppressed } = (0, validator_1.applySuppressions)({ config, violations });
+        logger_1.logger.debug(`Found ${violations.length} total violations before suppressions`);
+        // Apply suppressions
+        logger_1.logger.debug("Applying suppressions...");
+        const { unsuppressed, suppressed } = (0, validator_1.applySuppressions)({
+            config,
+            violations,
+        });
+        logger_1.logger.debug(`Unsuppressed: ${unsuppressed.length}, suppressed: ${suppressed.length}`);
+        // Build diagnostics
         const diagnostics = buildDiagnostics(parserIssues);
         const categories = countDiagnosticCategories(diagnostics);
-        // Create final report object for rendering (human or JSON).
+        // Final report
         const report = {
             checkedFiles: files.length,
             edges: edges.length,
@@ -72,16 +72,21 @@ async function runCheck(opts) {
                 totalCount: unsuppressed.length + suppressed.length,
             },
         };
-        // Exit code depends only on unsuppressed violations.
-        const exitCode = report.summary.unsuppressedCount > 0 ? types_1.ExitCode.VIOLATIONS : types_1.ExitCode.OK;
+        const exitCode = report.summary.unsuppressedCount > 0
+            ? types_1.ExitCode.VIOLATIONS
+            : types_1.ExitCode.OK;
+        logger_1.logger.debug(`Check completed with exit code ${exitCode}`);
         return { exitCode, report, analysis: report.analysis };
     }
     catch (e) {
-        // If config is invalid or missing, return config error code.
+        // #region agent log
+        fetch("http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8d2d4f" }, body: JSON.stringify({ sessionId: "8d2d4f", runId: "pre-fix", hypothesisId: "H5", location: "src/core/engine.ts:runCheck:catch", message: "runCheck caught error", data: { errorName: e.name, errorMessage: e.message, hasStack: Boolean(e.stack) }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
         if (e instanceof errors_1.ConfigError) {
+            logger_1.logger.error(`Config error: ${e.message}`);
             return { exitCode: types_1.ExitCode.CONFIG_ERROR, error: e.message };
         }
-        // Any other error is treated as internal error.
+        logger_1.logger.error(`Internal error: ${e.message}`);
         return {
             exitCode: types_1.ExitCode.INTERNAL_ERROR,
             error: `Internal error: ${e.message}`,

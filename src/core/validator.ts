@@ -1,17 +1,29 @@
 import { TrussConfig } from "../config/configSchema";
-import { DependencyEdge, SuppressedViolation, Violation } from "./types";
+import { SuppressedViolation, Violation, DependencyEdge } from "./types";
 
+/**
+ * function matchLayer()
+ * Purpose: Find a layer name for a file using config.layers patterns.
+ */
 function matchLayer(file: string, layers: TrussConfig["layers"]): string | null {
   for (const [layerName, patterns] of Object.entries(layers)) {
     for (const pattern of patterns) {
+      // Remove "**" at the end (very simple glob support).
       const normalized = pattern.replace(/\*\*$/, "");
+
+      // If file path starts with the pattern → it belongs to this layer.
       if (file.startsWith(normalized)) return layerName;
     }
   }
 
+  // No match → file is not in any layer.
   return null;
 }
 
+/**
+ * evaluateRules()
+ * Purpose: Check all dependency edges against config rules and collect violations.
+ */
 export function evaluateRules(opts: {
   config: TrussConfig;
   edges: DependencyEdge[];
@@ -32,7 +44,6 @@ export function evaluateRules(opts: {
   };
 
   for (const edge of edges) {
-    // Only internal dependencies participate in layer rules
     if (edge.importKind !== "internal") continue;
 
     const fromLayer = getLayer(edge.fromFile);
@@ -59,15 +70,21 @@ export function evaluateRules(opts: {
   return { violations, fileToLayer };
 }
 
+/**
+ * applySuppressions()
+ * Purpose: Split violations into unsuppressed + suppressed
+ */
 export function applySuppressions(opts: {
   config: TrussConfig;
   violations: Violation[];
 }): { unsuppressed: Violation[]; suppressed: SuppressedViolation[] } {
   const suppressions = opts.config.suppressions ?? [];
+
   const suppressed: SuppressedViolation[] = [];
   const unsuppressed: Violation[] = [];
 
   for (const v of opts.violations) {
+    // Find suppression that matches file + rule
     const s = suppressions.find(
       (x) => x.file === v.edge.fromFile && x.rule === v.ruleName,
     );
@@ -77,7 +94,8 @@ export function applySuppressions(opts: {
   }
 
   const byLocation = (a: Violation, b: Violation) =>
-    a.edge.fromFile.localeCompare(b.edge.fromFile) || a.edge.line - b.edge.line;
+    a.edge.fromFile.localeCompare(b.edge.fromFile) ||
+    a.edge.line - b.edge.line;
 
   suppressed.sort(byLocation);
   unsuppressed.sort(byLocation);

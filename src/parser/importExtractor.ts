@@ -1,18 +1,23 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as ts from "typescript";
-import { DependencyEdge } from "../core/types";
-import { FileScanError, ResolveError } from "../utils/errors";
+
+import { DependencyEdge, ParserIssue } from "../core/types";
+import { FileScanError } from "../utils/errors";
 import { logger } from "../utils/logger";
 import {
   resolveImportToFile,
   isLocalSpecifier,
 } from "../utils/pathResolver";
 
-// External normalization: keep root package name
-// "lodash/get" -> "lodash"
-// "@nestjs/common/testing" -> "@nestjs/common"
-// "node:fs" -> "node:fs"
+const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"];
+
+function toRepoRelativePosix(repoRoot: string, absPath: string): string | null {
+  const rel = path.relative(repoRoot, absPath);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join("/");
+}
+
 function normalizeExternal(specifier: string): string {
   if (specifier.startsWith("node:")) return specifier;
 
@@ -27,7 +32,7 @@ function normalizeExternal(specifier: string): string {
 export function parseImportsFromFile(opts: {
   repoRoot: string;
   file: string;
-}): DependencyEdge[] {
+}): { edges: DependencyEdge[]; parserIssues: ParserIssue[] } {
   const abs = path.resolve(opts.repoRoot, opts.file);
 
   logger.debug(`Parsing imports in file: ${opts.file}`);
@@ -37,7 +42,6 @@ export function parseImportsFromFile(opts: {
   }
 
   let sourceText: string;
-
   try {
     sourceText = fs.readFileSync(abs, "utf8");
   } catch {
@@ -53,26 +57,31 @@ export function parseImportsFromFile(opts: {
   );
 
   const edges: DependencyEdge[] = [];
+  const parserIssues: ParserIssue[] = [];
 
   function pushEdge(specifier: string, node: ts.Node): void {
     const start = node.getStart(sourceFile);
     const line = sourceFile.getLineAndCharacterOfPosition(start).line + 1;
     const importText = sourceText.slice(start, node.end).trim();
 
-    // Internal imports: "./x", "../x", "/src/x"
     if (isLocalSpecifier(specifier)) {
       const toFile = resolveImportToFile(opts.repoRoot, opts.file, specifier);
 
       if (!toFile) {
-        logger.error(
-          `Failed to resolve import "${specifier}" in ${opts.file}:${line}`,
+        logger.debug(
+          `Unresolvable import "${specifier}" in ${opts.file}:${line}`,
         );
 
-        throw new ResolveError(
-          `Import resolution error in ${opts.file}:${line}\n` +
-            `Unresolvable local import: "${specifier}"\n` +
-            `Import: ${importText}`,
-        );
+        parserIssues.push({
+          code: "UNRESOLVABLE_RELATIVE_IMPORT",
+          severity: "warning",
+          message: `Unresolvable relative import "${specifier}"`,
+          fromFile: opts.file,
+          line,
+          specifier,
+          importText,
+        });
+        return;
       }
 
       edges.push({
@@ -86,7 +95,6 @@ export function parseImportsFromFile(opts: {
       return;
     }
 
-    // External imports: "react", "express", "@nestjs/common", "node:fs"
     edges.push({
       fromFile: opts.file,
       packageName: normalizeExternal(specifier),
@@ -126,5 +134,6 @@ export function parseImportsFromFile(opts: {
   }
 
   visit(sourceFile);
-  return edges;
+
+  return { edges, parserIssues };
 }

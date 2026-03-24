@@ -2,7 +2,7 @@ import { TrussConfig } from "../config/configSchema";
 import { SuppressedViolation, Violation, DependencyEdge } from "./types";
 
 /**
- * matchLayer()
+ * function matchLayer()
  * Purpose: Find a layer name for a file using config.layers patterns.
  * Input:
  *  - file: file path (string)

@@ -4,10 +4,24 @@ import * as ts from "typescript";
 
 import { DependencyEdge, ParserIssue } from "../core/types";
 import { logger } from "../utils/logger";
-import {
-  resolveImportToFile,
-  isLocalSpecifier,
-} from "../utils/pathResolver";
+import { resolveImportToFile, isLocalSpecifier } from "../utils/pathResolver";
+
+const RESOLVABLE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mts",
+  ".cts",
+  ".mjs",
+  ".cjs",
+];
+
+// function toRepoRelativePosix(repoRoot: string, absPath: string): string | null {
+//   const rel = path.relative(repoRoot, absPath);
+//   if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
+//   return rel.split(path.sep).join("/");
+// }
 
 function normalizeExternal(specifier: string): string {
   // Reduces deep imports like `pkg/sub/path` to the package name used in reports.
@@ -138,7 +152,9 @@ export function parseImportsFromFile(opts: {
     parserIssues.push({
       code: "TYPESCRIPT_SYNTAX_DIAGNOSTIC",
       severity:
-        diagnostic.category === ts.DiagnosticCategory.Error ? "error" : "warning",
+        diagnostic.category === ts.DiagnosticCategory.Error
+          ? "error"
+          : "warning",
       message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
       fromFile: opts.file,
       line,

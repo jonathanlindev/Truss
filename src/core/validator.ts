@@ -2,7 +2,7 @@ import { TrussConfig } from "../config/configSchema";
 import { SuppressedViolation, Violation, DependencyEdge } from "./types";
 
 /**
- * function matchLayer()
+ * matchLayer()
  * Purpose: Find a layer name for a file using config.layers patterns.
  * Input:
  *  - file: file path (string)
@@ -27,17 +27,6 @@ function matchLayer(
   // No match → file is not in any layer.
   return null;
 }
-
-/**
- * evaluateRules()
- * Purpose: Check all dependency edges against config rules and collect violations.
- * Input:
- *  - opts.config: full Truss config (layers + rules + suppressions)
- *  - opts.edges: list of dependency edges between files
- * Output:
- *  - violations: all rule violations found
- *  - fileToLayer: cache map (file path -> layer name) for matched files
- */
 export function evaluateRules(opts: {
   config: TrussConfig;
   edges: DependencyEdge[];

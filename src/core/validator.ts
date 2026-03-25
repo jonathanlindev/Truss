@@ -69,7 +69,31 @@ export function evaluateRules(opts: {
   // Cache: file path -> layer name (only for files that match).
   const fileToLayer = new Map<string, string>();
   const violations: Violation[] = [];
+  const internalEdges = edges.filter(
+    (edge): edge is Extract<DependencyEdge, { importKind: "internal" }> =>
+      edge.importKind === "internal",
+  );
+  const outgoingByFile = new Map<string, typeof internalEdges>();
   let didLogMatchLayerProbe = false;
+
+  for (const edge of internalEdges) {
+    const bucket = outgoingByFile.get(edge.fromFile);
+    if (bucket) {
+      bucket.push(edge);
+      continue;
+    }
+    outgoingByFile.set(edge.fromFile, [edge]);
+  }
+
+  for (const [fromFile, outgoing] of outgoingByFile.entries()) {
+    outgoing.sort(
+      (a, b) =>
+        a.line - b.line ||
+        a.toFile.localeCompare(b.toFile) ||
+        a.importText.localeCompare(b.importText),
+    );
+    outgoingByFile.set(fromFile, outgoing);
+  }
 
   const getLayer = (file: string): string | null => {
     // Caches resolved layers so repeated files do not need to scan the config again.
@@ -132,28 +156,54 @@ export function evaluateRules(opts: {
     return layer;
   };
 
-  for (const edge of edges) {
-    // Only internal dependencies participate in layer rules
-    if (edge.importKind !== "internal") continue;
+  const emittedViolationKeys = new Set<string>();
 
+  for (const edge of internalEdges) {
     const fromLayer = getLayer(edge.fromFile);
-    const toLayer = getLayer(edge.toFile);
+    if (!fromLayer) continue;
 
-    if (!fromLayer || !toLayer) continue;
+    const applicableRules = config.rules.filter((rule) => rule.from === fromLayer);
+    if (applicableRules.length === 0) continue;
 
-    for (const rule of config.rules) {
-      if (rule.from !== fromLayer) continue;
-      if (!rule.disallow.includes(toLayer)) continue;
+    // Walk outward from the first imported file to evaluate both direct and transitive targets.
+    const queue: string[] = [edge.toFile];
+    const visited = new Set<string>();
 
-      violations.push({
-        ruleName: rule.name,
-        fromLayer,
-        toLayer,
-        edge,
-        reason:
-          rule.message ??
-          `${fromLayer} layer must not depend on ${toLayer} layer.`,
-      });
+    while (queue.length > 0) {
+      const currentFile = queue.shift() as string;
+      if (visited.has(currentFile)) continue;
+      visited.add(currentFile);
+
+      const currentLayer = getLayer(currentFile);
+      if (currentLayer) {
+        for (const rule of applicableRules) {
+          if (!rule.disallow.includes(currentLayer)) continue;
+
+          const key = [
+            rule.name,
+            edge.fromFile,
+            currentFile,
+            edge.line.toString(),
+            edge.importText,
+          ].join("|");
+          if (emittedViolationKeys.has(key)) continue;
+          emittedViolationKeys.add(key);
+
+          violations.push({
+            ruleName: rule.name,
+            fromLayer,
+            toLayer: currentLayer,
+            edge: { ...edge, toFile: currentFile },
+            reason:
+              rule.message ??
+              `${fromLayer} layer must not depend on ${currentLayer} layer.`,
+          });
+        }
+      }
+
+      const next = outgoingByFile.get(currentFile);
+      if (!next) continue;
+      for (const out of next) queue.push(out.toFile);
     }
   }
 

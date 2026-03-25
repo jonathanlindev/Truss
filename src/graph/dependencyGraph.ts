@@ -8,14 +8,29 @@ export function buildDependencyEdges(opts: {
 }): { edges: DependencyEdge[]; parserIssues: ParserIssue[] } {
   const edges: DependencyEdge[] = [];
   const parserIssues: ParserIssue[] = [];
+  const parseCache = new Map<
+    string,
+    { edges: DependencyEdge[]; parserIssues: ParserIssue[] }
+  >();
+  const visited = new Set<string>();
 
   logger.debug(`Building dependency edges for ${opts.files.length} files`);
 
   for (const file of opts.files) {
+    traverseInternalDependencies(file);
+  }
+
+  function parseWithCache(file: string): {
+    edges: DependencyEdge[];
+    parserIssues: ParserIssue[];
+  } {
+    const cached = parseCache.get(file);
+    if (cached) return cached;
+
     try {
       const parsed = parseImportsFromFile({ repoRoot: opts.repoRoot, file });
-      edges.push(...parsed.edges);
-      parserIssues.push(...parsed.parserIssues);
+      parseCache.set(file, parsed);
+      return parsed;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "unknown parser error";
@@ -23,12 +38,34 @@ export function buildDependencyEdges(opts: {
       logger.error(`Failed to analyze dependencies for ${file}: ${message}`);
 
       // Isolate this file-level failure and continue analyzing the rest.
-      parserIssues.push({
-        code: "SOURCE_FILE_READ_FAILED",
-        severity: "error",
-        message: `Failed to analyze source file dependencies: ${message}`,
-        fromFile: file,
-      });
+      const failed: { edges: DependencyEdge[]; parserIssues: ParserIssue[] } = {
+        edges: [],
+        parserIssues: [
+          {
+            code: "SOURCE_FILE_READ_FAILED",
+            severity: "error",
+            message: `Failed to analyze source file dependencies: ${message}`,
+            fromFile: file,
+          },
+        ],
+      };
+      parseCache.set(file, failed);
+      return failed;
+    }
+  }
+
+  function traverseInternalDependencies(file: string): void {
+    // A file can be reached from multiple roots/cycles; parse and emit once.
+    if (visited.has(file)) return;
+    visited.add(file);
+
+    const parsed = parseWithCache(file);
+    edges.push(...parsed.edges);
+    parserIssues.push(...parsed.parserIssues);
+
+    for (const edge of parsed.edges) {
+      if (edge.importKind !== "internal") continue;
+      traverseInternalDependencies(edge.toFile);
     }
   }
 

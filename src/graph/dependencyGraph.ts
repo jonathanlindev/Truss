@@ -12,12 +12,16 @@ export function buildDependencyEdges(opts: {
     string,
     { edges: DependencyEdge[]; parserIssues: ParserIssue[] }
   >();
-  const visited = new Set<string>();
+  const parserIssuesSeenForFile = new Set<string>();
+  const emittedEdgeKeys = new Set<string>();
 
   logger.debug(`Building dependency edges for ${opts.files.length} files`);
 
   for (const file of opts.files) {
-    traverseInternalDependencies(file);
+    traverseInternalDependencies(file, {
+      visiting: new Set<string>(),
+      visited: new Set<string>(),
+    });
   }
 
   function parseWithCache(file: string): {
@@ -54,19 +58,35 @@ export function buildDependencyEdges(opts: {
     }
   }
 
-  function traverseInternalDependencies(file: string): void {
-    // A file can be reached from multiple roots/cycles; parse and emit once.
-    if (visited.has(file)) return;
-    visited.add(file);
+  function traverseInternalDependencies(
+    file: string,
+    state: { visiting: Set<string>; visited: Set<string> },
+  ): void {
+    // Per-root cycle guard: bail when we revisit a file still being expanded.
+    if (state.visiting.has(file) || state.visited.has(file)) return;
+    state.visiting.add(file);
 
     const parsed = parseWithCache(file);
-    edges.push(...parsed.edges);
-    parserIssues.push(...parsed.parserIssues);
+
+    if (!parserIssuesSeenForFile.has(file)) {
+      parserIssuesSeenForFile.add(file);
+      parserIssues.push(...parsed.parserIssues);
+    }
+
+    for (const edge of parsed.edges) {
+      const key = edgeDedupKey(edge);
+      if (emittedEdgeKeys.has(key)) continue;
+      emittedEdgeKeys.add(key);
+      edges.push(edge);
+    }
 
     for (const edge of parsed.edges) {
       if (edge.importKind !== "internal") continue;
-      traverseInternalDependencies(edge.toFile);
+      traverseInternalDependencies(edge.toFile, state);
     }
+
+    state.visiting.delete(file);
+    state.visited.add(file);
   }
 
   // Sorting by source location and target keeps reports and snapshots stable across runs.
@@ -86,4 +106,16 @@ export function buildDependencyEdges(opts: {
 function targetKey(e: DependencyEdge): string {
   // Internal edges sort by destination file, external edges by package name.
   return e.importKind === "internal" ? e.toFile : e.packageName;
+}
+
+function edgeDedupKey(edge: DependencyEdge): string {
+  // Stable key keeps transitive traversal deterministic across roots and cycles.
+  const toKey = edge.importKind === "internal" ? edge.toFile : edge.packageName;
+  return [
+    edge.importKind,
+    edge.fromFile,
+    toKey,
+    edge.line.toString(),
+    edge.importText,
+  ].join("|");
 }

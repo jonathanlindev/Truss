@@ -6,6 +6,7 @@
  */
 export const logger = {
   isEnabled(): boolean {
+    // All logger methods share the same DEBUG gate so CLI output stays quiet by default.
     return process.env.DEBUG === "true";
   },
   /**

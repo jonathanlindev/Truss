@@ -24,6 +24,7 @@ export function toRepoRelativePosix(
   repoRoot: string,
   absPath: string,
 ): string | null {
+  // Rejects paths outside the repo so internal edges never point at external files.
   const rel = path.relative(repoRoot, absPath);
 
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
@@ -64,21 +65,15 @@ export function resolveImportToFile(
   const fromAbs = path.resolve(repoRoot, fromFile);
   const baseDir = path.dirname(fromAbs);
 
-  /**
-   * If specifier starts with "/":
-   * treat it as repo-root-relative, for example:
-   * "/src/utils/x" -> "<repoRoot>/src/utils/x"
-   *
-   * If specifier starts with ".":
-   * treat it as file-relative, for example:
-   * "../utils/x" -> relative to current file
-   */
+  // Leading `/` is treated as repo-root-relative; leading `.` stays relative to the importing file.
   const unresolved = specifier.startsWith("/")
     ? path.resolve(repoRoot, `.${specifier}`)
     : path.resolve(baseDir, specifier);
 
   logger.debug(`Base resolved path for "${specifier}": ${unresolved}`);
 
+  // Tries the raw path, extension variants, and `index.*` variants in the same order
+  // import paths are commonly resolved when extensions are omitted.
   const candidates: string[] = [
     unresolved,
     ...RESOLVABLE_EXTENSIONS.map((ext) => `${unresolved}${ext}`),

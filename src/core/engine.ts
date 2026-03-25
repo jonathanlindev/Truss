@@ -23,14 +23,14 @@ export async function runCheck(
 
     logger.debug(`Starting Truss check in ${repoRoot}`);
 
-    // Load config
+    // Loads and validates the config before any filesystem or analysis work begins.
     logger.debug("Loading config...");
     const config = loadTrussConfig(
       path.resolve(repoRoot, opts.configPath),
       opts.configPath
     );
 
-    // Discover files
+    // Scans the repo for supported source files after config ignores are applied.
     logger.debug("Scanning source files...");
     const files = discoverSourceFiles({
       repoRoot,
@@ -44,7 +44,7 @@ export async function runCheck(
       );
     }
 
-    // Build dependency graph (NEW API)
+    // Parses every discovered file and combines the dependency edges and parser warnings.
     logger.debug("Building dependency graph...");
     const graph = buildDependencyEdges({ repoRoot, files });
 
@@ -54,14 +54,14 @@ export async function runCheck(
     logger.debug(`Built ${edges.length} dependency edges`);
     logger.debug(`Collected ${parserIssues.length} parser issues`);
 
-    // Evaluate rules
+    // Converts dependency edges into violations by comparing layer relationships to the rules.
     logger.debug("Evaluating architecture rules...");
     const { violations } = evaluateRules({ config, edges });
     logger.debug(
       `Found ${violations.length} total violations before suppressions`
     );
 
-    // Apply suppressions
+    // Moves matching violations into the suppressed bucket without removing them from the report.
     logger.debug("Applying suppressions...");
     const { unsuppressed, suppressed } = applySuppressions({
       config,
@@ -72,11 +72,11 @@ export async function runCheck(
       `Unsuppressed: ${unsuppressed.length}, suppressed: ${suppressed.length}`
     );
 
-    // Build diagnostics
+    // Exposes parser warnings through the structured diagnostics section of the report.
     const diagnostics = buildDiagnostics(parserIssues);
     const categories = countDiagnosticCategories(diagnostics);
 
-    // Final report
+    // Builds the final report shape consumed by both human and JSON formatters.
     const report: TrussReport = {
       checkedFiles: files.length,
       edges: edges.length,
@@ -119,6 +119,7 @@ export async function runCheck(
 }
 
 function buildDiagnostics(parserIssues: ParserIssue[]): AnalysisDiagnostic[] {
+  // Re-maps parser issues into the generic diagnostics format used by report.analysis.
   return parserIssues.map((issue) => ({
     category: "parser",
     code: issue.code,
@@ -133,6 +134,7 @@ function buildDiagnostics(parserIssues: ParserIssue[]): AnalysisDiagnostic[] {
 function countDiagnosticCategories(
   diagnostics: AnalysisDiagnostic[]
 ): AnalysisCategoryCounts {
+  // Counts diagnostics by category so the report can show both the full list and a summary.
   const counts: AnalysisCategoryCounts = {
     parser: 0,
     graph: 0,

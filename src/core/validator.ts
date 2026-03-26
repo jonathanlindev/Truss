@@ -1,81 +1,34 @@
 import { TrussConfig } from "../config/configSchema";
 import { SuppressedViolation, Violation, DependencyEdge } from "./types";
 
-/**
- * function matchLayer()
- * Purpose: Find a layer name for a file using config.layers patterns.
- * Input:
- *  - file: file path (string)
- *  - layers: config "layers" object (layerName -> patterns[])
- * Output:
- *  - layer name (string) if matched, otherwise null
- */
 function matchLayer(
   file: string,
   layers: TrussConfig["layers"],
 ): string | null {
   for (const [layerName, patterns] of Object.entries(layers)) {
     for (const pattern of patterns) {
-      // Remove "**" at the end (very simple glob support).
       const normalized = pattern.replace(/\*\*$/, "");
-
-      // If file path starts with the pattern → it belongs to this layer.
       if (file.startsWith(normalized)) return layerName;
     }
   }
-
-  // No match → file is not in any layer.
   return null;
 }
 
-/**
- * evaluateRules()
- * Purpose: Check all dependency edges against config rules and collect violations.
- * Input:
- *  - opts.config: full Truss config (layers + rules + suppressions)
- *  - opts.edges: list of dependency edges between files
- * Output:
- *  - violations: all rule violations found
- *  - fileToLayer: cache map (file path -> layer name) for matched files
- */
 export function evaluateRules(opts: {
   config: TrussConfig;
   edges: DependencyEdge[];
 }): { violations: Violation[]; fileToLayer: Map<string, string> } {
   const { config, edges } = opts;
-  // #region agent log
-  fetch("http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "8d2d4f",
-    },
-    body: JSON.stringify({
-      sessionId: "8d2d4f",
-      runId: "pre-fix",
-      hypothesisId: "H2",
-      location: "src/core/validator.ts:evaluateRules:entry",
-      message: "evaluateRules entry",
-      data: {
-        edgeCount: edges.length,
-        ruleCount: config.rules.length,
-        layerCount: Object.keys(config.layers ?? {}).length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
-  // Cache: file path -> layer name (only for files that match).
   const fileToLayer = new Map<string, string>();
   const violations: Violation[] = [];
   const internalEdges = edges.filter(
     (edge): edge is Extract<DependencyEdge, { importKind: "internal" }> =>
       edge.importKind === "internal",
   );
-  const outgoingByFile = new Map<string, typeof internalEdges>();
-  let didLogMatchLayerProbe = false;
 
+  // build adjacency list for the transitive BFS walk below
+  const outgoingByFile = new Map<string, typeof internalEdges>();
   for (const edge of internalEdges) {
     const bucket = outgoingByFile.get(edge.fromFile);
     if (bucket) {
@@ -96,63 +49,10 @@ export function evaluateRules(opts: {
   }
 
   const getLayer = (file: string): string | null => {
-    // Caches resolved layers so repeated files do not need to scan the config again.
     const cached = fileToLayer.get(file);
     if (cached) return cached;
-
-    if (!didLogMatchLayerProbe) {
-      didLogMatchLayerProbe = true;
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "8d2d4f",
-          },
-          body: JSON.stringify({
-            sessionId: "8d2d4f",
-            runId: "pre-fix",
-            hypothesisId: "H1",
-            location: "src/core/validator.ts:getLayer:beforeMatchLayer",
-            message: "matchLayer probe before invocation",
-            data: { probeFile: file, matchLayerType: typeof matchLayer },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
-    }
-
-    if (!didLogMatchLayerProbe) {
-      didLogMatchLayerProbe = true;
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7861/ingest/8b9c63fd-394c-4722-bece-a02463c6f64a",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "8d2d4f",
-          },
-          body: JSON.stringify({
-            sessionId: "8d2d4f",
-            runId: "pre-fix",
-            hypothesisId: "H1",
-            location: "src/core/validator.ts:getLayer:beforeMatchLayer",
-            message: "matchLayer probe before invocation",
-            data: { probeFile: file, matchLayerType: typeof matchLayer },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
-    }
-
     const layer = matchLayer(file, config.layers);
     if (layer) fileToLayer.set(file, layer);
-
     return layer;
   };
 
@@ -165,12 +65,15 @@ export function evaluateRules(opts: {
     const applicableRules = config.rules.filter((rule) => rule.from === fromLayer);
     if (applicableRules.length === 0) continue;
 
-    // Walk outward from the first imported file to evaluate both direct and transitive targets.
-    const queue: string[] = [edge.toFile];
+    // BFS from the first imported file; track the full path so transitive
+    // violations show the chain rather than a misleading import text.
+    const queue: Array<{ file: string; path: string[] }> = [
+      { file: edge.toFile, path: [edge.fromFile, edge.toFile] },
+    ];
     const visited = new Set<string>();
 
     while (queue.length > 0) {
-      const currentFile = queue.shift() as string;
+      const { file: currentFile, path: currentPath } = queue.shift()!;
       if (visited.has(currentFile)) continue;
       visited.add(currentFile);
 
@@ -179,12 +82,18 @@ export function evaluateRules(opts: {
         for (const rule of applicableRules) {
           if (!rule.disallow.includes(currentLayer)) continue;
 
+          const isDirect = currentPath.length === 2;
+          const importText = isDirect
+            ? edge.importText
+            : `(transitive: ${currentPath.join(" → ")})`;
+          const reportLine = isDirect ? edge.line : 0;
+
           const key = [
             rule.name,
             edge.fromFile,
             currentFile,
-            edge.line.toString(),
-            edge.importText,
+            reportLine.toString(),
+            importText,
           ].join("|");
           if (emittedViolationKeys.has(key)) continue;
           emittedViolationKeys.add(key);
@@ -193,7 +102,7 @@ export function evaluateRules(opts: {
             ruleName: rule.name,
             fromLayer,
             toLayer: currentLayer,
-            edge: { ...edge, toFile: currentFile },
+            edge: { ...edge, toFile: currentFile, importText, line: reportLine },
             reason:
               rule.message ??
               `${fromLayer} layer must not depend on ${currentLayer} layer.`,
@@ -203,24 +112,15 @@ export function evaluateRules(opts: {
 
       const next = outgoingByFile.get(currentFile);
       if (!next) continue;
-      for (const out of next) queue.push(out.toFile);
+      for (const out of next) {
+        queue.push({ file: out.toFile, path: [...currentPath, out.toFile] });
+      }
     }
   }
 
   return { violations, fileToLayer };
 }
 
-/**
- * applySuppressions()
- * Purpose: Split violations into two lists:
- *  - unsuppressed: real violations (should fail the check)
- *  - suppressed: violations that are allowed with a suppression reason
- * Input:
- *  - opts.config: Truss config (we use config.suppressions)
- *  - opts.violations: violations found by evaluateRules
- * Output:
- *  - unsuppressed + suppressed arrays
- */
 export function applySuppressions(opts: {
   config: TrussConfig;
   violations: Violation[];
@@ -231,7 +131,7 @@ export function applySuppressions(opts: {
   const unsuppressed: Violation[] = [];
 
   for (const v of opts.violations) {
-    // Find suppression that matches "from file" + rule name.
+    // match on source file + rule name
     const s = suppressions.find(
       (x) => x.file === v.edge.fromFile && x.rule === v.ruleName,
     );
@@ -240,7 +140,6 @@ export function applySuppressions(opts: {
     else unsuppressed.push(v);
   }
 
-  // Sort by file path, then by line number (stable output).
   const byLocation = (a: Violation, b: Violation) =>
     a.edge.fromFile.localeCompare(b.edge.fromFile) || a.edge.line - b.edge.line;
 

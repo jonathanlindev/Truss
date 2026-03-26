@@ -8,6 +8,9 @@ export function buildDependencyEdges(opts: {
 }): { edges: DependencyEdge[]; parserIssues: ParserIssue[] } {
   const edges: DependencyEdge[] = [];
   const parserIssues: ParserIssue[] = [];
+  // only recurse into files that were discovered — prevents ignored files
+  // from being reintroduced transitively
+  const discoveredFiles = new Set(opts.files);
   const parseCache = new Map<
     string,
     { edges: DependencyEdge[]; parserIssues: ParserIssue[] }
@@ -89,7 +92,9 @@ export function buildDependencyEdges(opts: {
       .sort((a, b) => a.localeCompare(b));
 
     for (const toFile of sortedInternalTargets) {
-      traverseInternalDependencies(toFile, state);
+      if (discoveredFiles.has(toFile)) {
+        traverseInternalDependencies(toFile, state);
+      }
     }
 
     state.visiting.delete(file);

@@ -12,8 +12,8 @@
       "edge": {
         "fromFile": "src/api/user.ts",
         "toFile": "src/db/client.ts",
-        "importText": "import { serviceStatus } from \"../service/status\";",
-        "line": 1,
+        "importText": "(transitive: src/api/user.ts → src/service/status.ts → src/db/client.ts)",
+        "line": 0,
         "importKind": "internal"
       },
       "reason": "API layer must not depend on DB layer."
@@ -21,7 +21,6 @@
   ],
   "suppressed": [],
   "parserIssues": [],
-  "diagnostics": [],
   "analysis": {
     "diagnostics": [],
     "categories": {

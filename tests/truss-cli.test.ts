@@ -167,7 +167,6 @@ test("json includes parser diagnostics and category counts", () => {
 
   const parsed = JSON.parse(result.stdout) as {
     parserIssues: Array<{ code: string }>;
-    diagnostics: Array<{ category: string }>;
     analysis: { diagnostics: Array<{ category: string }>; categories: Record<string, number> };
     summary: { parserIssueCount: number; diagnosticCount: number };
   };
@@ -176,8 +175,6 @@ test("json includes parser diagnostics and category counts", () => {
   assert.strictEqual(parsed.parserIssues[0]?.code, "UNRESOLVABLE_RELATIVE_IMPORT");
   assert.strictEqual(parsed.analysis.diagnostics.length, 1);
   assert.strictEqual(parsed.analysis.diagnostics[0]?.category, "parser");
-  assert.strictEqual(parsed.diagnostics.length, 1);
-  assert.strictEqual(parsed.diagnostics[0]?.category, "parser");
   assert.strictEqual(parsed.analysis.categories.parser, 1);
   assert.strictEqual(parsed.summary.parserIssueCount, 1);
   assert.strictEqual(parsed.summary.diagnosticCount, 1);
@@ -206,9 +203,8 @@ test("syntax errors do not stop analysis of other files", () => {
 
   const parsed = JSON.parse(result.stdout) as {
     unsuppressed: Array<{ ruleName: string; edge: { fromFile: string } }>;
-    diagnostics: Array<{ category: string; code: string; file?: string }>;
     parserIssues: Array<{ code: string; fromFile: string }>;
-    analysis: { categories: Record<string, number> };
+    analysis: { diagnostics: Array<{ category: string; code: string; file?: string }>; categories: Record<string, number> };
     summary: { parserIssueCount: number; diagnosticCount: number };
   };
 
@@ -223,7 +219,7 @@ test("syntax errors do not stop analysis of other files", () => {
     ),
   );
   assert.ok(
-    parsed.diagnostics.some(
+    parsed.analysis.diagnostics.some(
       (diagnostic) =>
         diagnostic.category === "parser" &&
         diagnostic.code === "TYPESCRIPT_SYNTAX_DIAGNOSTIC" &&
@@ -231,7 +227,7 @@ test("syntax errors do not stop analysis of other files", () => {
     ),
   );
   assert.strictEqual(parsed.analysis.categories.parser, parsed.summary.parserIssueCount);
-  assert.strictEqual(parsed.summary.diagnosticCount, parsed.diagnostics.length);
+  assert.strictEqual(parsed.summary.diagnosticCount, parsed.analysis.diagnostics.length);
 });
 
 test("human snapshot for suppressed-only violations", () => {

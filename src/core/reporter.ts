@@ -51,7 +51,7 @@ export function renderHumanReport(
 
     if (parserIssueCount > 0) {
       lines.push("");
-      lines.push(...renderDiagnosticsSection(report.diagnostics, parserIssueCount));
+      lines.push(...renderDiagnosticsSection(report.analysis.diagnostics, parserIssueCount));
     }
 
     lines.push("Summary:");
@@ -89,7 +89,7 @@ export function renderHumanReport(
   }
 
   if (parserIssueCount > 0) {
-    lines.push(...renderDiagnosticsSection(report.diagnostics, parserIssueCount));
+    lines.push(...renderDiagnosticsSection(report.analysis.diagnostics, parserIssueCount));
   }
 
   return lines.join("\n");
@@ -144,7 +144,6 @@ export function buildJsonReport(report: TrussReport, exitCode: number): JsonRepo
     unsuppressed,
     suppressed,
     parserIssues: report.parserIssues,
-    diagnostics: report.diagnostics,
     analysis: report.analysis,
     summary: {
       unsuppressedCount: report.summary.unsuppressedCount,

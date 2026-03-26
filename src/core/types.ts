@@ -74,7 +74,6 @@ export type TrussReport = {
   unsuppressed: Violation[];
   suppressed: SuppressedViolation[];
   parserIssues: ParserIssue[];
-  diagnostics: AnalysisDiagnostic[];
   analysis: {
     diagnostics: AnalysisDiagnostic[];
     categories: AnalysisCategoryCounts;
@@ -99,7 +98,6 @@ export interface JsonReportV1 {
   unsuppressed: Violation[];
   suppressed: SuppressedViolation[];
   parserIssues: ParserIssue[];
-  diagnostics: AnalysisDiagnostic[];
   analysis: {
     diagnostics: AnalysisDiagnostic[];
     categories: AnalysisCategoryCounts;
@@ -137,7 +135,6 @@ export type CheckRunResult =
   | {
       exitCode: typeof ExitCode.OK | typeof ExitCode.VIOLATIONS;
       report: TrussReport;
-      diagnostics: AnalysisDiagnostic[];
     }
   | {
       exitCode: typeof ExitCode.CONFIG_ERROR | typeof ExitCode.INTERNAL_ERROR;
